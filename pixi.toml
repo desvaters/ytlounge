@@ -1,0 +1,28 @@
+[workspace]
+name = "ytlounge"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+# Unpinned on purpose: the client must work on the newest Python; nothing
+# here caps the version. Today that resolves to 3.14.
+python = ">=3.11"
+# The only runtime dependency. Without it: ModuleNotFoundError on import.
+httpx = ">=0.27"
+# Test runner. Without it `pixi run test` fails with "pytest: command not found".
+pytest = ">=8"
+# Builds wheel and sdist for `pixi run build`. Without it: "No module named build".
+python-build = ">=1.2"
+# Validates the built metadata the way PyPI will, and does the upload.
+twine = ">=6"
+
+[pypi-dependencies]
+# The project itself, editable, so changes under src/ are visible at once.
+ytlounge = { path = ".", editable = true }
+
+[tasks]
+# Fixture tests only. The device test needs YTLOUNGE_SCREEN_ID and network.
+test = "pytest -m 'not device'"
+test-device = "pytest -m device"
+build = "python -m build"
+check = { cmd = "twine check dist/*", depends-on = ["build"] }

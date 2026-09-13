@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ytlounge"
+version = "0.1.0"
+description = "Client for the YouTube Lounge API: pair with a TV screen, play videos, manage its queue"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Maxi" }]
+keywords = ["youtube", "lounge", "tv", "remote", "cast", "queue"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development :: Libraries",
+]
+# The only runtime dependency. httpx always sends Content-Length, which the
+# Lounge bind endpoint requires even for an empty body.
+dependencies = ["httpx>=0.27"]
+
+[project.urls]
+Homepage = "https://github.com/desvaters/ytlounge"
+Issues = "https://github.com/desvaters/ytlounge/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ytlounge"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/.pixi", "/pixi.lock", "/.claude", "/NOTES.md", "/HANDOFF.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "device: talks to the real Lounge API and needs a paired screen (opt-in)",
+]
