@@ -60,6 +60,20 @@ def find_event(messages: list[Message], name: str) -> Message | None:
     return None
 
 
+def playlist_video_ids(messages: list[Message]) -> list[str]:
+    """Return the queue the screen reported in its ``playlistModified`` event.
+
+    The bind response carries the current queue as one comma-separated string
+    of video ids. A missing or empty event means an empty queue, which is what
+    a screen sitting on its start page sends.
+    """
+    event = find_event(messages, "playlistModified")
+    if event is None or len(event) < 2 or not isinstance(event[1], dict):
+        return []
+    raw = event[1].get("videoIds")
+    return [v for v in str(raw or "").split(",") if v]
+
+
 def session_ids(messages: list[Message]) -> tuple[str, str]:
     """Extract ``(sid, gsessionid)`` from a bind handshake.
 

@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from ytlounge.chunked import find_event, parse_frames, session_ids
+from ytlounge.chunked import (
+    find_event,
+    parse_frames,
+    playlist_video_ids,
+    session_ids,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -17,6 +22,27 @@ def test_parse_session_handshake() -> None:
     )
     status = find_event(messages, "loungeStatus")
     assert status is not None and status[1]["queueId"].startswith("QUEUE")
+
+
+def test_queue_comes_from_the_handshake() -> None:
+    messages = parse_frames((FIXTURES / "bind_session.txt").read_text())
+    assert playlist_video_ids(messages) == ["jNQXAC9IVRw", "aqz-KE-bpKQ"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"videoIds": ""},
+        {},
+        {"videoIds": None},
+    ],
+)
+def test_empty_queue_reads_as_no_videos(payload: dict) -> None:
+    assert playlist_video_ids([[0, ["playlistModified", payload]]]) == []
+
+
+def test_queue_without_the_event_is_empty() -> None:
+    assert playlist_video_ids([[0, ["c", "sid", "", 8]]]) == []
 
 
 def test_parse_command_ack() -> None:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ytlounge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Client for the YouTube Lounge API: pair with a TV screen, play videos, manage its queue"
 readme = "README.md"
 license = "MIT"
@@ -36,7 +36,7 @@ Issues = "https://github.com/desvaters/ytlounge/issues"
 packages = ["src/ytlounge"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/.pixi", "/pixi.lock", "/.claude", "/NOTES.md", "/HANDOFF.md"]
+exclude = ["/.pixi", "/pixi.lock", "/.claude", "/HANDOFF.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

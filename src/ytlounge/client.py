@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from .chunked import parse_frames, session_ids
+from .chunked import parse_frames, playlist_video_ids, session_ids
 from .models import (
     CommandError,
     PairingError,
@@ -66,6 +66,12 @@ def _check_ids(video_ids: Sequence[str], what: str) -> list[str]:
     return ids
 
 
+def _check_id(video_id: str, what: str) -> str:
+    if not video_id:
+        raise ValueError(f"{what} needs a non-empty video id")
+    return video_id
+
+
 def _check_play_args(video_ids: Sequence[str], start_index: int) -> list[str]:
     ids = _check_ids(video_ids, "play")
     if not 0 <= start_index < len(ids):
@@ -75,13 +81,26 @@ def _check_play_args(video_ids: Sequence[str], start_index: int) -> list[str]:
 
 class Session:
     """An open channel to one screen. Cheap to create, so callers open a fresh
-    one per play/add call instead of keeping it around."""
+    one per command instead of keeping it around.
 
-    def __init__(self, lounge: Lounge, screen: Screen, sid: str, gsessionid: str):
+    ``queue`` holds the video ids the screen reported while the session was
+    being opened. It is a snapshot taken at that moment: it does not follow
+    later changes, not even those made through this session.
+    """
+
+    def __init__(
+        self,
+        lounge: Lounge,
+        screen: Screen,
+        sid: str,
+        gsessionid: str,
+        queue: Sequence[str] = (),
+    ):
         self._lounge = lounge
         self.screen = screen
         self.sid = sid
         self.gsessionid = gsessionid
+        self.queue = list(queue)
         self._rid = 1  # the bind used RID=1; commands continue from 2
 
     def _next_rid(self) -> str:
@@ -133,6 +152,24 @@ class Session:
         for video_id in _check_ids(video_ids, "add"):
             self._lounge._sleep(self._lounge._rng(*ADD_DELAY_RANGE))
             self._command("addVideo", {"videoId": video_id})
+
+    def play_next(self, video_id: str) -> None:
+        """Put ``video_id`` right behind the video that is playing, leaving
+        the rest of the queue in place.
+
+        One video, not a sequence: a single insert is verified, but in which
+        order several of them end up on the screen is not, and guessing it
+        would bake an assumption into the API.
+        """
+        self._command("insertVideo", {"videoId": _check_id(video_id, "play_next")})
+
+    def remove(self, video_id: str) -> None:
+        """Drop ``video_id`` from the queue."""
+        self._command("removeVideo", {"videoId": _check_id(video_id, "remove")})
+
+    def clear(self) -> None:
+        """Empty the queue."""
+        self._command("clearPlaylist", {})
 
 
 class Lounge:
@@ -244,10 +281,13 @@ class Lounge:
         if response.status_code != 200:
             raise SessionError(f"HTTP {response.status_code}: {response.text[:200]}")
         try:
-            sid, gsessionid = session_ids(parse_frames(response.text))
+            messages = parse_frames(response.text)
+            sid, gsessionid = session_ids(messages)
         except ValueError as exc:
             raise SessionError(str(exc)) from exc
-        return Session(self, screen, sid, gsessionid)
+        # The same bind that hands out the ids also reports the screen's
+        # current queue, so reading it costs no extra request.
+        return Session(self, screen, sid, gsessionid, playlist_video_ids(messages))
 
     # -- convenience ----------------------------------------------------------
 
@@ -272,3 +312,21 @@ class Lounge:
         """Open a session and append to the queue. See :meth:`Session.add`."""
         _check_ids(video_ids, "add")
         self.connect(screen).add(video_ids)
+
+    def play_next(self, screen: Screen, video_id: str) -> None:
+        """Open a session and insert. See :meth:`Session.play_next`."""
+        _check_id(video_id, "play_next")
+        self.connect(screen).play_next(video_id)
+
+    def remove(self, screen: Screen, video_id: str) -> None:
+        """Open a session and remove. See :meth:`Session.remove`."""
+        _check_id(video_id, "remove")
+        self.connect(screen).remove(video_id)
+
+    def clear(self, screen: Screen) -> None:
+        """Open a session and empty the queue. See :meth:`Session.clear`."""
+        self.connect(screen).clear()
+
+    def queue(self, screen: Screen) -> list[str]:
+        """Open a session and return the queue the screen reports."""
+        return self.connect(screen).queue

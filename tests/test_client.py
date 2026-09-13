@@ -195,6 +195,88 @@ def test_add_delay_range_is_two_to_five_seconds() -> None:
     assert seen == [(2.0, 5.0)]
 
 
+# -- play_next / remove / clear -------------------------------------------
+
+
+def test_play_next_sends_insert_video() -> None:
+    lounge, rec = make_lounge([text(200, SESSION_BODY), text(200, ACK_BODY)])
+    lounge.play_next(SCREEN, "jNQXAC9IVRw")
+
+    req = rec.requests[1]
+    assert form(req) == {
+        "count": "1",
+        "req0__sc": "insertVideo",
+        "req0_videoId": "jNQXAC9IVRw",
+    }
+    assert req.url.params["RID"] == "2"
+    assert len(rec.requests) == 2, "one insert, no delay request in between"
+
+
+def test_remove_sends_remove_video() -> None:
+    lounge, rec = make_lounge([text(200, SESSION_BODY), text(200, ACK_BODY)])
+    lounge.remove(SCREEN, "aqz-KE-bpKQ")
+
+    assert form(rec.requests[1]) == {
+        "count": "1",
+        "req0__sc": "removeVideo",
+        "req0_videoId": "aqz-KE-bpKQ",
+    }
+
+
+def test_clear_sends_clear_playlist_without_fields() -> None:
+    lounge, rec = make_lounge([text(200, SESSION_BODY), text(200, ACK_BODY)])
+    lounge.clear(SCREEN)
+
+    assert form(rec.requests[1]) == {"count": "1", "req0__sc": "clearPlaylist"}
+
+
+def test_queue_commands_reject_an_empty_id_before_connecting() -> None:
+    lounge, rec = make_lounge([text(200, SESSION_BODY)])
+    with pytest.raises(ValueError):
+        lounge.play_next(SCREEN, "")
+    with pytest.raises(ValueError):
+        lounge.remove(SCREEN, "")
+    assert rec.requests == [], "no session is opened for an invalid call"
+
+
+@pytest.mark.parametrize(
+    "call, action",
+    [
+        (lambda lounge: lounge.play_next(SCREEN, "a"), "insertVideo"),
+        (lambda lounge: lounge.remove(SCREEN, "a"), "removeVideo"),
+        (lambda lounge: lounge.clear(SCREEN), "clearPlaylist"),
+    ],
+)
+def test_queue_commands_report_the_action_on_http_error(call, action: str) -> None:
+    lounge, _ = make_lounge([text(200, SESSION_BODY), text(400, "nope")])
+    with pytest.raises(CommandError, match=action):
+        call(lounge)
+
+
+# -- reading the queue ----------------------------------------------------
+
+
+def test_queue_comes_from_the_bind_without_a_second_request() -> None:
+    lounge, rec = make_lounge([text(200, SESSION_BODY)])
+    assert lounge.queue(SCREEN) == ["jNQXAC9IVRw", "aqz-KE-bpKQ"]
+    assert len(rec.requests) == 1, "the bind already carried the queue"
+
+
+def test_session_queue_is_a_snapshot_and_does_not_follow_commands() -> None:
+    lounge, _ = make_lounge([text(200, SESSION_BODY), text(200, ACK_BODY)])
+    session = lounge.connect(SCREEN)
+    before = list(session.queue)
+    session.clear()
+    assert session.queue == before
+
+
+def test_queue_of_a_screen_with_nothing_queued_is_empty() -> None:
+    """A screen on its start page binds without a playlistModified event."""
+    payload = '[[0,["c","S1","",8]],[1,["S","G1"]]]'
+    lounge, _ = make_lounge([text(200, f"{len(payload)}\n{payload}")])
+    assert lounge.queue(SCREEN) == []
+
+
 # -- pair / refresh ---------------------------------------------------------
 
 
